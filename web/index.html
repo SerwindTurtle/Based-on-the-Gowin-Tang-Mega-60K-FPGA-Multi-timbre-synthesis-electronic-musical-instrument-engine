@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FPGA 多音色合成器 · 控制台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">FP<br>GA</div>
+    <div class="brand-text">
+      <h1>多音色合成器 · 图形化控制台</h1>
+      <p>Tang Mega 60K · GW5AT-LV60 · 8 键 · 48.8 kHz</p>
+    </div>
+  </div>
+
+  <div class="conn">
+    <span id="connDot" class="dot off"></span>
+    <div class="conn-text">
+      <strong id="connText">未连接</strong>
+      <small id="portInfo">115200 8N1 · 板载 DEBUG-USB2</small>
+    </div>
+    <button id="btnConnect" class="btn primary">连接串口</button>
+    <button id="btnDisconnect" class="btn" disabled>断开</button>
+    <button id="btnPing" class="btn ghost" disabled title="发一帧 PING，检查串口是否通">Ping</button>
+    <button id="btnHelp" class="btn ghost" title="串口位置 / 接线 / 协议说明">?</button>
+  </div>
+</header>
+
+<div id="unsupported" class="banner hidden">
+  <strong>当前浏览器不支持 Web Serial。</strong>
+  请用 <b>Chrome / Edge 89+</b> 打开本页；如果是从 <code>file://</code> 直接打开的，
+  也可以运行 <code>web\启动控制台.cmd</code> 用 <code>http://localhost</code> 打开。
+</div>
+
+<main class="grid">
+
+  <!-- ================= 第一列：音色设计 ================= -->
+  <div class="col col-1">
+
+    <section class="card card-timbre">
+      <div class="card-head">
+        <h2>音色设计</h2>
+        <span class="hint" id="timbreHint">当前：锯齿</span>
+      </div>
+
+      <div class="preset-grid" id="presetGrid"></div>
+      <p class="tiny">手动改波形、FM、ADSR、泛音或单次包络，会自动进入「自定义」档；再点任意预设即可退出。</p>
+
+      <div class="row">
+        <span class="lbl">波形</span>
+        <div class="seg" id="waveSeg">
+          <button data-wave="0">方波</button>
+          <button data-wave="1">锯齿</button>
+          <button data-wave="2">三角</button>
+          <button data-wave="3">正弦</button>
+          <button data-wave="4">钢琴</button>
+          <button data-wave="5">FM</button>
+        </div>
+      </div>
+
+      <div class="wave-box">
+        <canvas id="waveCanvas" width="560" height="120"></canvas>
+        <div class="wave-legend"><span id="waveLabel">锯齿波</span><span id="wavePhase">单周期</span></div>
+      </div>
+
+      <div class="subcard">
+        <div class="sub-head">FM 合成</div>
+        <div class="row">
+          <label class="lbl" for="fmRatio">调制比</label>
+          <select id="fmRatio">
+            <option value="0">0.5</option>
+            <option value="1">1.0</option>
+            <option value="2">1.5</option>
+            <option value="3">2.0</option>
+            <option value="4">2.5</option>
+            <option value="5">3.0</option>
+            <option value="6">3.5</option>
+            <option value="7">4.0</option>
+          </select>
+          <span class="unit" id="fmRatioHint">1.0×</span>
+        </div>
+        <div class="row">
+          <label class="lbl" for="fmDepth">调制深度</label>
+          <input type="range" id="fmDepth" min="0" max="4" step="1">
+          <span class="unit mono" id="fmDepthVal">&gt;&gt;&gt;2</span>
+        </div>
+      </div>
+
+      <div class="subcard">
+        <div class="sub-head">
+          <span>钢琴泛音配比</span>
+          <span class="mono accent" id="harmLabel">51 : 33 : 24 : 17</span>
+        </div>
+        <div class="harm-grid" id="harmGrid"></div>
+        <p class="tiny">拖动可把各次谐波按 0 / −6 / −12 / −18 dB 衰减；全 0 时就是原来的 51:33:24:17。</p>
+      </div>
+
+      <div class="toggle-row">
+        <label class="switch">
+          <input type="checkbox" id="velPress">
+          <span class="track"></span>
+          <span class="switch-text">压力力度（钢琴/古筝/木琴）</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="oneshot">
+          <span class="track"></span>
+          <span class="switch-text">单次包络（衰减到 0 自动结束）</span>
+        </label>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= 第二列：包络 + 演奏 ================= -->
+  <div class="col col-2">
+
+    <section class="card card-env">
+      <div class="card-head">
+        <h2>包络 ADSR</h2>
+        <span class="hint mono" id="envTimes">A 20ms · D 190ms · R 335ms</span>
+      </div>
+
+      <canvas id="envCanvas" width="760" height="220"></canvas>
+
+      <div class="env-grid">
+        <div class="ctl">
+          <label for="atk">起音 A</label>
+          <input type="range" id="atk" min="0" max="1000" step="1">
+          <div class="val">
+            <input type="number" id="atkNum" min="1" max="65535" step="1" title="直接填步长 (1~65535)">
+            <span id="atkTime">20 ms</span>
+          </div>
+        </div>
+        <div class="ctl">
+          <label for="dec">衰减 D</label>
+          <input type="range" id="dec" min="0" max="1000" step="1">
+          <div class="val">
+            <input type="number" id="decNum" min="0" max="65535" step="1">
+            <span id="decTime">190 ms</span>
+          </div>
+        </div>
+        <div class="ctl">
+          <label for="sus">延音电平 S</label>
+          <input type="range" id="sus" min="0" max="65535" step="1">
+          <div class="val">
+            <input type="number" id="susNum" min="0" max="65535" step="1">
+            <span id="susPct">70%</span>
+          </div>
+        </div>
+        <div class="ctl">
+          <label for="rel">释音 R</label>
+          <input type="range" id="rel" min="0" max="1000" step="1">
+          <div class="val">
+            <input type="number" id="relNum" min="0" max="65535" step="1">
+            <span id="relTime">335 ms</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="env-extra">
+        <div class="ctl">
+          <label for="rate">包络速率</label>
+          <input type="range" id="rate" min="0" max="4" step="1">
+          <div class="val"><span id="rateVal">1× · 48.8 kHz</span></div>
+        </div>
+        <div class="ctl">
+          <label for="exp">指数衰减位数</label>
+          <input type="range" id="exp" min="0" max="15" step="1">
+          <div class="val"><span id="expVal">0 · 线性</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card card-perf">
+      <div class="card-head">
+        <h2>演奏效果</h2>
+        <span class="hint" id="perfHint">实时生效</span>
+      </div>
+
+      <div class="perf-switches">
+        <label class="switch small">
+          <input type="checkbox" id="vibSw">
+          <span class="track"></span>
+          <span class="switch-text">颤音</span>
+        </label>
+        <label class="switch small">
+          <input type="checkbox" id="glideSw">
+          <span class="track"></span>
+          <span class="switch-text">滑音</span>
+        </label>
+        <label class="switch small">
+          <input type="checkbox" id="monoSw">
+          <span class="track"></span>
+          <span class="switch-text">单音</span>
+        </label>
+      </div>
+
+      <div class="ctl perf-ctl">
+        <label for="vibRate"><span>颤音速率</span><span class="ctl-val" id="vibRateVal">5.5 Hz</span></label>
+        <input type="range" id="vibRate" min="5" max="120" step="1">
+      </div>
+      <div class="ctl perf-ctl">
+        <label for="vibDepth"><span>颤音深度</span><span class="ctl-val" id="vibDepthVal">±33 音分</span></label>
+        <input type="range" id="vibDepth" min="0" max="127" step="1">
+      </div>
+      <div class="ctl perf-ctl">
+        <label for="glideTime"><span>滑音时间</span><span class="ctl-val" id="glideTimeVal">τ 21 ms</span></label>
+        <input type="range" id="glideTime" min="0" max="15" step="1">
+      </div>
+      <div class="ctl perf-ctl">
+        <label for="transpose"><span>实时变调</span><span class="ctl-val" id="transposeVal">0 半音</span></label>
+        <div class="transpose-row">
+          <input type="range" id="transpose" min="-12" max="12" step="1">
+          <button id="transposeReset" class="btn small ghost" title="归零">0</button>
+        </div>
+      </div>
+      <div class="ctl perf-ctl">
+        <label for="octave"><span>八度偏移</span><span class="ctl-val" id="octaveVal">0</span></label>
+        <div class="transpose-row">
+          <input type="range" id="octave" min="-2" max="2" step="1">
+          <button id="octaveReset" class="btn small ghost" title="归零">0</button>
+        </div>
+      </div>
+      <div class="ctl perf-ctl">
+        <label for="sustain"><span>延音（松开后）</span><span class="ctl-val" id="sustainVal">关（原释音）</span></label>
+        <div class="transpose-row">
+          <input type="range" id="sustain" min="0" max="127" step="1">
+          <button id="sustainReset" class="btn small ghost" title="关闭延音">关</button>
+        </div>
+      </div>
+
+      <p class="tiny">
+        延音踏板：松开琴键后不立刻掐断，而是按「延音」滑块慢慢衰减。
+        0 = 保持原来的释音；越大尾音越长。钢琴/古筝/木琴默认关；颠琴/钟琴默认开（40）。
+        切到持续音会自动关闭并禁用滑块；手动改过延音后保持到下一次切音色。
+        ADSR 里的「延音电平 S」是按住时的电平，和这个踏板不是一回事。
+      </p>
+
+      <p class="tiny">
+        单音：所有键共用一条声部，后按的键实时接管音高、不重触发包络；配合滑音就是滑音变调。
+        颤音/滑音在单音模式下最自然（复音模式下每个键固定一条声部，滑音不明显）。
+      </p>
+    </section>
+  </div>
+
+  <!-- ================= 第三列：实时监视 ================= -->
+  <div class="col col-3">
+
+    <section class="card card-monitor">
+      <div class="card-head">
+        <h2>实时监视</h2>
+        <span class="hint" id="monHint">24 Hz 遥测</span>
+      </div>
+
+      <div class="vel-box">
+        <div class="vel-num"><span id="velNum">0</span><small>/127</small></div>
+        <div class="vel-meter"><i id="velBar"></i></div>
+        <div class="vel-caption">
+          <span>力度</span>
+          <span class="mono">ADC <b id="rawNum">0</b></span>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat"><span class="stat-k">声部数</span><span class="stat-v mono" id="polyNum">0</span></div>
+        <div class="stat"><span class="stat-k">峰值</span><span class="stat-v mono" id="peakNum">0</span></div>
+        <div class="stat"><span class="stat-k">八度</span><span class="stat-v mono" id="octNum">0</span></div>
+        <div class="stat"><span class="stat-k">I²C</span><span class="stat-v" id="i2cChip">—</span></div>
+      </div>
+
+      <p class="tiny">声部数 = 按下的键数 × 齐奏层数（含附加锯齿层）；8 键 × 4 层 = 32。</p>
+
+      <div class="scope-box">
+        <div class="scope-head"><span>波形 / 频谱预览</span><span class="mono" id="scopeHint">按当前音色</span></div>
+        <canvas id="monWaveCanvas" width="320" height="74"></canvas>
+        <canvas id="monSpecCanvas" width="320" height="74"></canvas>
+      </div>
+
+      <div class="keydots" id="keyDots"></div>
+
+      <div class="chips">
+        <span class="chip" id="pageChip">主界面</span>
+        <span class="chip" id="errChip">I²C 错误 0</span>
+        <span class="chip" id="setChip">写入 0</span>
+        <span class="chip" id="rxChip">串口错误 0</span>
+      </div>
+
+      <p class="tiny" id="frameInfo">还没收到遥测帧</p>
+    </section>
+  </div>
+
+  <!-- ================= 全宽：32 声部混音台 + 效果器 + EQ ================= -->
+  <section class="card card-mixer span-all">
+    <div class="card-head">
+      <h2>混音台 · 32 声部</h2>
+      <span class="hint" id="mixHint">声部 1–8 使用中 · 9–32 预留（默认折叠）</span>
+    </div>
+
+    <div class="mixer-top">
+      <div class="master-box">
+        <button id="muteBtn" class="mute-btn" title="静音 / 取消静音">♪</button>
+        <div class="master-slider">
+          <div class="master-top">
+            <span>主音量</span>
+            <span class="mono accent" id="masterVal">100%</span>
+          </div>
+          <input type="range" id="master" min="0" max="255" step="1">
+        </div>
+      </div>
+
+      <div class="mixer-mixshift">
+        <label for="mixShift">总衰减</label>
+        <input type="range" id="mixShift" min="0" max="6" step="1">
+        <span class="unit mono" id="mixShiftVal">÷4</span>
+      </div>
+
+      <div class="mixer-actions">
+        <button id="expandAllVoices" class="btn small">全部展开</button>
+        <button id="collapseAllVoices" class="btn small ghost">全部折叠</button>
+        <span class="hintline" id="mixSum">0 个声部在响</span>
+      </div>
+    </div>
+
+    <div id="voiceSections"></div>
+
+    <div class="fx-title-row">
+      <h3>发送式效果器</h3>
+      <span class="tiny">每个声部有 4 路发送量，送到下面 4 个全局效果器；<b>调整某路发送量会自动打开对应效果器</b>。</span>
+    </div>
+
+    <div class="fx-grid">
+      <div class="subcard fx-card">
+        <div class="fx-head">
+          <span class="fx-title">回声 Echo</span>
+          <label class="switch small"><input type="checkbox" id="echoOn"><span class="track"></span><span class="switch-text">开</span></label>
+        </div>
+        <div class="fx-ctl"><label for="echoTime">延时 <span id="echoTimeVal">48 ms</span></label><input type="range" id="echoTime" min="0" max="255" step="1"></div>
+        <div class="fx-ctl"><label for="echoFb">反馈 <span id="echoFbVal">38%</span></label><input type="range" id="echoFb" min="0" max="15" step="1"></div>
+        <div class="fx-ctl"><label for="echoMix">返回量 <span id="echoMixVal">50%</span></label><input type="range" id="echoMix" min="0" max="127" step="1"></div>
+      </div>
+
+      <div class="subcard fx-card">
+        <div class="fx-head">
+          <span class="fx-title">混响 Reverb</span>
+          <label class="switch small"><input type="checkbox" id="revOn"><span class="track"></span><span class="switch-text">开</span></label>
+        </div>
+        <div class="fx-ctl"><label for="revSize">空间大小 <span id="revSizeVal">50%</span></label><input type="range" id="revSize" min="0" max="127" step="1"></div>
+        <div class="fx-ctl"><label for="revDamp">阻尼 <span id="revDampVal">50%</span></label><input type="range" id="revDamp" min="0" max="127" step="1"></div>
+        <div class="fx-ctl"><label for="revMix">返回量 <span id="revMixVal">50%</span></label><input type="range" id="revMix" min="0" max="127" step="1"></div>
+      </div>
+
+      <div class="subcard fx-card">
+        <div class="fx-head">
+          <span class="fx-title">合唱 Chorus</span>
+          <label class="switch small"><input type="checkbox" id="choOn"><span class="track"></span><span class="switch-text">开</span></label>
+        </div>
+        <div class="fx-ctl"><label for="choRate">速率 <span id="choRateVal">0.6 Hz</span></label><input type="range" id="choRate" min="0" max="127" step="1"></div>
+        <div class="fx-ctl"><label for="choDepth">深度 <span id="choDepthVal">31%</span></label><input type="range" id="choDepth" min="0" max="127" step="1"></div>
+        <div class="fx-ctl"><label for="choMix">返回量 <span id="choMixVal">50%</span></label><input type="range" id="choMix" min="0" max="127" step="1"></div>
+      </div>
+
+      <div class="subcard fx-card">
+        <div class="fx-head">
+          <span class="fx-title">相位 Phaser</span>
+          <label class="switch small"><input type="checkbox" id="phaOn"><span class="track"></span><span class="switch-text">开</span></label>
+        </div>
+        <div class="fx-ctl"><label for="phaRate">速率 <span id="phaRateVal">0.2 Hz</span></label><input type="range" id="phaRate" min="0" max="127" step="1"></div>
+        <div class="fx-ctl"><label for="phaDepth">深度 <span id="phaDepthVal">31%</span></label><input type="range" id="phaDepth" min="0" max="127" step="1"></div>
+        <div class="fx-ctl"><label for="phaFb">反馈 <span id="phaFbVal">25%</span></label><input type="range" id="phaFb" min="0" max="15" step="1"></div>
+        <div class="fx-ctl"><label for="phaMix">返回量 <span id="phaMixVal">50%</span></label><input type="range" id="phaMix" min="0" max="127" step="1"></div>
+      </div>
+    </div>
+
+    <div class="fx-title-row">
+      <h3>32 声部齐奏 / 超锯齿</h3>
+      <span class="tiny"><b>8 键 × 4 层 = 32 个振荡器</b>；附加层共用每键的包络/力度，所以不需要 32 套 ADSR。</span>
+    </div>
+
+    <div class="subcard fx-card unison-card">
+      <div class="fx-head">
+        <span class="fx-title">齐奏 Unison</span>
+        <label class="switch small"><input type="checkbox" id="uniOn"><span class="track"></span><span class="switch-text">开</span></label>
+      </div>
+      <div class="unison-grid">
+        <div class="fx-ctl"><label for="uniLayers">层数 <span id="uniLayersVal">4 层 · 32 声部</span></label><input type="range" id="uniLayers" min="1" max="4" step="1"></div>
+        <div class="fx-ctl"><label for="uniDetune">失谐量 <span id="uniDetuneVal">0.78%</span></label><input type="range" id="uniDetune" min="0" max="127" step="1"></div>
+        <div class="fx-ctl"><label for="uniMix">附加层混合 <span id="uniMixVal">38%</span></label><input type="range" id="uniMix" min="0" max="127" step="1"></div>
+      </div>
+      <p class="tiny">主声部是第 1 层；附加层是微失谐锯齿。想听纯 supersaw，请把音色选到「锯齿」再开齐奏。
+        层数 4 = 每键 4 层 = 8 键共 32 个振荡器；层数 2/3 分别是 16/24 个。</p>
+    </div>
+
+    <div class="fx-title-row">
+      <h3>PWM 脉宽调制</h3>
+      <span class="tiny">只作用在「方波」音色；锯齿/三角/正弦/FM 不受影响。深度 0 = 固定脉宽。</span>
+    </div>
+
+    <div class="subcard fx-card pwm-card">
+      <div class="unison-grid">
+        <div class="fx-ctl"><label for="pwmWidth">基础脉宽 <span id="pwmWidthVal">50.2%</span></label><input type="range" id="pwmWidth" min="0" max="255" step="1"></div>
+        <div class="fx-ctl"><label for="pwmRate">调制速率 <span id="pwmRateVal">3.0 Hz</span></label><input type="range" id="pwmRate" min="0" max="127" step="1"></div>
+        <div class="fx-ctl"><label for="pwmDepth">调制深度 <span id="pwmDepthVal">50%</span></label><input type="range" id="pwmDepth" min="0" max="127" step="1"></div>
+      </div>
+      <p class="tiny">PWM 让方波的占空比随 LFO 摆动，听感比固定方波更“活”。只作用方波：动 PWM 时会自动切到方波；深度拉到 0 就是固定脉宽。</p>
+    </div>
+
+    <div class="fx-title-row">
+      <h3>失真 / 限幅</h3>
+      <span class="tiny">失真在主效果链前级；限幅在 EQ 之后，保护功放和耳朵。</span>
+    </div>
+
+    <div class="fx-grid fx-grid-2">
+      <div class="subcard fx-card">
+        <div class="fx-head">
+          <span class="fx-title">失真 Distortion</span>
+          <label class="switch small"><input type="checkbox" id="drvOn"><span class="track"></span><span class="switch-text">开</span></label>
+        </div>
+        <div class="fx-ctl"><label for="drvDrive">驱动 <span id="drvDriveVal">0%</span></label><input type="range" id="drvDrive" min="0" max="127" step="1"></div>
+        <div class="fx-ctl"><label for="drvTone">音色 <span id="drvToneVal">50%</span></label><input type="range" id="drvTone" min="0" max="127" step="1"></div>
+        <div class="fx-ctl"><label for="drvMix">混合 <span id="drvMixVal">50%</span></label><input type="range" id="drvMix" min="0" max="127" step="1"></div>
+      </div>
+
+      <div class="subcard fx-card">
+        <div class="fx-head">
+          <span class="fx-title">限幅器 Limiter</span>
+          <label class="switch small"><input type="checkbox" id="limOn"><span class="track"></span><span class="switch-text">开</span></label>
+        </div>
+        <div class="fx-ctl"><label for="limTh">阈值 <span id="limThVal">-1.0 dB</span></label><input type="range" id="limTh" min="0" max="255" step="1"></div>
+        <div class="fx-ctl"><label for="limCeil">天花板 <span id="limCeilVal">-0.1 dB</span></label><input type="range" id="limCeil" min="0" max="255" step="1"></div>
+        <div class="fx-ctl"><label for="limRel">软拐点 <span id="limRelVal">3</span></label><input type="range" id="limRel" min="0" max="127" step="1"></div>
+      </div>
+    </div>
+
+    <div class="subcard eq-card">
+      <div class="fx-head">
+        <span class="fx-title">均衡器 EQ · 5 段</span>
+        <label class="switch small"><input type="checkbox" id="eqOn"><span class="track"></span><span class="switch-text">开</span></label>
+      </div>
+      <div class="eq-bank">
+        <div class="eq-band">
+          <span class="eq-db" id="eqLowVal">0 dB</span>
+          <input type="range" class="eq-slider" id="eqLow" min="-24" max="12" step="1" value="0">
+          <span class="eq-freq">低频<br>&lt;120</span>
+        </div>
+        <div class="eq-band">
+          <span class="eq-db" id="eqLmidVal">0 dB</span>
+          <input type="range" class="eq-slider" id="eqLmid" min="-24" max="12" step="1" value="0">
+          <span class="eq-freq">中低<br>120–500</span>
+        </div>
+        <div class="eq-band">
+          <span class="eq-db" id="eqMidVal">0 dB</span>
+          <input type="range" class="eq-slider" id="eqMid" min="-24" max="12" step="1" value="0">
+          <span class="eq-freq">中频<br>0.5–1k</span>
+        </div>
+        <div class="eq-band">
+          <span class="eq-db" id="eqHmidVal">0 dB</span>
+          <input type="range" class="eq-slider" id="eqHmid" min="-24" max="12" step="1" value="0">
+          <span class="eq-freq">中高<br>1–5k</span>
+        </div>
+        <div class="eq-band">
+          <span class="eq-db" id="eqHighVal">0 dB</span>
+          <input type="range" class="eq-slider" id="eqHigh" min="-24" max="12" step="1" value="0">
+          <span class="eq-freq">高频<br>&gt;5k</span>
+        </div>
+        <div class="eq-trim">
+          <label for="eqOut">EQ 输出 <span id="eqOutVal">100%</span></label>
+          <input type="range" id="eqOut" min="0" max="255" step="1">
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footbar">
+  <div class="foot-group">
+    <button id="btnRead" class="btn small">从 FPGA 读回</button>
+    <span class="tiny" style="margin:0">把板子里的真实参数读回网页（调试用）</span>
+  </div>
+  <div class="foot-group">
+    <button id="btnSave" class="btn small">保存到浏览器</button>
+    <button id="btnExport" class="btn small">导出 JSON</button>
+    <button id="btnImport" class="btn small">导入 JSON</button>
+    <input type="file" id="fileImport" accept=".json,application/json" hidden>
+    <button id="btnFactory" class="btn small warn">恢复出厂</button>
+  </div>
+  <div class="foot-group">
+    <button id="btnToggleLog" class="btn small ghost">协议日志</button>
+  </div>
+</footer>
+
+<div id="logWrap" class="log-wrap hidden">
+  <div class="log-head">
+    <span>串口日志</span>
+    <div style="display:flex; align-items:center; gap:12px">
+      <label class="switch small">
+        <input type="checkbox" id="logFrames">
+        <span class="track"></span>
+        <span class="switch-text">显示收发帧</span>
+      </label>
+      <button id="btnClearLog" class="btn small ghost">清空</button>
+    </div>
+  </div>
+  <pre id="log"></pre>
+</div>
+
+<div id="helpModal" class="modal hidden">
+  <div class="modal-card">
+    <button class="modal-x" id="btnCloseHelp">×</button>
+    <h2>串口在哪里？</h2>
+    <p>
+      板上标着 <b class="accent">DEBUG-USB2</b> 的那个 USB-C 口（就是下载码流用的那个，
+      不是 <code>USB3.0</code> 那两个）。板载 BL616 同时提供 <b>JTAG + UART</b>，
+      会枚举出<b>两个</b> COM 口：<b>A 通道 = JTAG</b>、<b>B 通道 = UART</b>——
+      用 <b>B 通道</b>那个（本机实测 A=COM5 / B=COM6）。
+      <b>不需要外接 CH340 模块。</b>
+    </p>
+    <p class="tiny">
+      如果一定要用外接 CH340：不能并在 U15/V14 上（会和 BL616 抢线），
+      只能把 <code>src/fpga_project.cst</code> 里的 <code>UART_TX / UART_RX</code>
+      改到 40P 排针上的两个空闲 3.3V IO，重新综合布线。
+    </p>
+
+    <h2>连不上怎么办</h2>
+    <ol>
+      <li>确认板子电源已开（PWR 长按 2 秒），USB 线是<b>数据线</b>。</li>
+      <li>设备管理器里要能看到 B 通道的 <code>USB Serial Port (COMx)</code>。</li>
+      <li>网页必须用 Chrome / Edge 打开；<code>file://</code> 不支持时用 <code>web\启动控制台.cmd</code>。</li>
+      <li>点“连接串口”后如果一直“无响应”，试试点 Ping；仍无响应就拔插一次 USB。</li>
+      <li>FPGA 重新烧录后串口会重新枚举，网页需要重新连接。</li>
+    </ol>
+
+    <h2>演奏效果怎么用</h2>
+    <ul>
+      <li><b>颤音</b>：全局 LFO 调制音高，速率 0.5~12Hz，深度约 ±0~±104 音分。</li>
+      <li><b>滑音</b>：新音高不直接跳过去，而是按“时间常数”慢慢逼近；在单音模式下最明显。</li>
+      <li><b>单音</b>：8 个键共用一条声部，后按的键实时接管音高，只要还有键按着就不重触发包络——
+        配合滑音就是“实时滑音变调”。</li>
+      <li><b>实时变调</b>：整体移调 ±12 半音；按住音再拖它，配合滑音会滑过去。</li>
+      <li><b>八度偏移</b>：±2 个八度，和板上 KBD_UP / KBD_DN 是同一个状态，会互相跟随。</li>
+      <li><b>延音（松开后）</b>：像钢琴延音踏板，松手后声音不立刻消失，而是慢慢衰减。
+        0 = 关闭（原释音）；越大尾音越长。只对钢琴/古筝/木琴/颠琴/钟琴（one-shot）有效：
+        钢琴/古筝/木琴切过去默认关，颠琴/钟琴默认开（40）；切到持续音会自动关闭并禁用滑块。
+        ADSR 的 S 是按住时的电平，不是这个踏板。</li>
+    </ul>
+
+    <h2>混音台 / 效果器 / EQ 怎么用</h2>
+    <ul>
+      <li><b>32 个声部</b>：1–8 对应 8 个琴键，默认展开；9–32 是预留声部，默认折叠，
+        点「全部展开」可以提前设好参数。</li>
+      <li><b>每通道</b>：音量、失真，以及回声/混响/合唱/相位 4 路<b>发送量</b>（0–15）。
+        发送量只决定这个声部送多少到全局效果器；<b>发送量从 0 拉高会自动打开对应效果器</b>。</li>
+      <li><b>效果器</b>：回声（延时/反馈/返回量）、混响（空间/阻尼/返回量）、
+        合唱（速率/深度/返回量）、相位（速率/深度/反馈/返回量）。</li>
+      <li><b>自定义音色</b>：手动改波形/FM/ADSR/泛音/单次包络会自动进入「自定义」档；
+        再点任意预设或按板上 KEY0 退出。</li>
+      <li><b>PWM 脉宽调制</b>：基础脉宽/速率/深度，只作用在方波音色；动 PWM 会自动切到方波。</li>
+      <li><b>颠琴 / 钟琴</b>：两个 FM 音色，都是 one-shot，所以延音踏板对它们有效。</li>
+      <li><b>监视器</b>：网页波形/频谱是参数预览；HDMI 顶部是真实音频的 4 段频谱（8 条）。</li>
+      <li><b>失真 / 限幅</b>：主失真（驱动/音色/混合）和限幅器（阈值/天花板/软拐点）。</li>
+      <li><b>32 声部齐奏</b>：8 键 × 4 层 = 32 个振荡器；附加 3 层是微失谐锯齿，
+        共用每键包络/力度。默认开；层数 1~4、失谐量、混合量可调。</li>
+      <li><b>均衡器</b>：5 段（低频/中低/中频/中高/高频），每段 −24~+12dB，另有 EQ 输出。</li>
+    </ul>
+
+    <h2>协议（115200 8N1）</h2>
+    <pre class="mini-code">A5 5A | TYPE | LEN | PAYLOAD | CRC8(poly 0x07)
+01 SET   N × {addr, val_lo, val_hi}   N≤16
+02 GET   N × {addr}
+03 PING
+81 VALUE / 82 TELEM(16B, 24Hz) / 83 PONG</pre>
+    <p class="tiny">完整寄存器表见 <code>web/README.md</code> 和 <code>src/param_regs.v</code> 文件头。</p>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
