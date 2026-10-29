@@ -1,0 +1,47 @@
+<?xml version="1" encoding="UTF-8"?>
+<!DOCTYPE gowin-fpga-project>
+<Project>
+    <Template>FPGA</Template>
+    <Version>5</Version>
+    <Device name="GW5AT-60B" pn="GW5AT-LV60PG484AC1/I0">gw5at60b-002</Device>
+    <FileList>
+        <File path="src/adc_ctrl.v" type="file.verilog" enable="1"/>
+        <File path="src/adc_filter.v" type="file.verilog" enable="1"/>
+        <File path="src/ads1115_ctrl.v" type="file.verilog" enable="1"/>
+        <File path="src/adsr.v" type="file.verilog" enable="1"/>
+        <File path="src/button_in.v" type="file.verilog" enable="1"/>
+        <File path="src/dvi_tx/dvi_tx.v" type="file.verilog" enable="1"/>
+        <File path="src/gowin_adc/gowin_adc.v" type="file.verilog" enable="1"/>
+        <File path="src/gowin_pll/pll_simple.v" type="file.verilog" enable="1"/>
+        <File path="src/hdmi/hdmi_ui.v" type="file.verilog" enable="1"/>
+        <File path="src/hdmi/hdmi_timing.v" type="file.verilog" enable="1"/>
+        <File path="src/dbg_force_draw.v" type="file.verilog" enable="1"/>
+        <File path="src/i2c_scan.v" type="file.verilog" enable="1"/>
+        <File path="src/i2c_master.v" type="file.verilog" enable="1"/>
+        <File path="src/i2s_tx.v" type="file.verilog" enable="1"/>
+        <File path="src/keyboard_in.v" type="file.verilog" enable="1"/>
+        <File path="src/lcd_draw.v" type="file.verilog" enable="1"/>
+        <File path="src/lcd_timing.v" type="file.verilog" enable="1"/>
+        <File path="src/fx_channel_mix.v" type="file.verilog" enable="1"/>
+        <File path="src/fx_echo.v" type="file.verilog" enable="1"/>
+        <File path="src/fx_reverb.v" type="file.verilog" enable="1"/>
+        <File path="src/fx_mod.v" type="file.verilog" enable="1"/>
+        <File path="src/fx_master.v" type="file.verilog" enable="1"/>
+        <File path="src/fx_chain.v" type="file.verilog" enable="1"/>
+        <File path="src/unison_saw.v" type="file.verilog" enable="1"/>
+        <File path="src/spectrum4.v" type="file.verilog" enable="1"/>
+        <File path="src/note_gen.v" type="file.verilog" enable="1"/>
+        <File path="src/param_regs.v" type="file.verilog" enable="1"/>
+        <File path="src/uart_rx.v" type="file.verilog" enable="1"/>
+        <File path="src/uart_tx.v" type="file.verilog" enable="1"/>
+        <File path="src/vib_lfo.v" type="file.verilog" enable="1"/>
+        <File path="src/osc_voice.v" type="file.verilog" enable="1"/>
+        <File path="src/scope_capture.v" type="file.verilog" enable="1"/>
+        <File path="src/synth_voices.v" type="file.verilog" enable="1"/>
+        <File path="src/top.v" type="file.verilog" enable="1"/>
+        <File path="src/voice_alloc.v" type="file.verilog" enable="1"/>
+        <File path="src/voice_meter.v" type="file.verilog" enable="1"/>
+        <File path="src/fpga_project.cst" type="file.cst" enable="1"/>
+        <File path="src/fpga_project.sdc" type="file.sdc" enable="1"/>
+    </FileList>
+</Project>
