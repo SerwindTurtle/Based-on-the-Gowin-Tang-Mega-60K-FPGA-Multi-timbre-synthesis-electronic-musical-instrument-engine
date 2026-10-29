@@ -1,0 +1,295 @@
+// ============================================================
+//  Tang Mega 60K 压力感应演奏合成器 引脚约束
+//  器件：GW5AT-LV60PG484AC1/I0  (GW5AT-60B)
+//  顶层模块：top
+//
+//  ⚠️ 本文件不能带 UTF-8 BOM，否则 Gowin 会报
+//     ERROR (CT2000) syntax error near '?'
+//     编辑后如果报这个错，先把 BOM 去掉。
+// ============================================================
+
+// ---------- 系统 ----------
+IO_LOC  "sys_clk"    V22;
+IO_PORT "sys_clk"    IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+
+IO_LOC  "sys_rst_n"  AA13;
+IO_PORT "sys_rst_n"  IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+
+// ============================================================
+//  ★★ 串口 UART（2026-10-26 新增：网页控制台）★★
+// ============================================================
+//  引脚是板子**专用**的 UART：FPGA U15=TX / V14=RX，板上直连 BL616 调试器
+//  （BL616 同时提供 USB-JTAG，即下载码流用的那个口）。
+//
+//  ★ 物理位置：板上丝印 **DEBUG-USB2** 的 USB-C 口（不是 USB3.0 那个）。
+//     插上 USB-C 后 Windows 会出现 "USB Serial Converter A/B" 和一个
+//     "USB Serial Port (COMx)"；网页里选这个 COMx 即可。
+//     → 不需要外接 CH340 模块！
+//
+//  ★ 如果你确实想外接 CH340 模块：
+//     那两个脚（U15/V14）已经焊到 BL616 上了，**不要再并联**（两个输出会打架）。
+//     只能把 UART_TX/UART_RX 改到 40P 排针 / PMOD 上的两个空闲 3.3V IO，
+//     例如：
+//         IO_LOC  "UART_TX"  <你的球号>;
+//         IO_PORT "UART_TX"  IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+//         IO_LOC  "UART_RX"  <你的球号>;
+//         IO_PORT "UART_RX"  IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+//     然后重新综合+布线。端口名不用改。
+//
+//  ★ 电气：3.3V LVCMOS，115200 8N1，空闲高电平。GND 必须共地。
+// ============================================================
+IO_LOC  "UART_TX"  U15;   // FPGA TXD -> BL616 UART RX
+IO_PORT "UART_TX"  IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+
+IO_LOC  "UART_RX"  V14;   // FPGA RXD <- BL616 UART TX
+IO_PORT "UART_RX"  IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+// ---------- LED（★ 精简为 3 个）----------
+//  原设计用 8 个 LED。现在 T18 / R18 让给白键了（见键盘段），
+//  显示音色号 0~4 只需要 3 位，所以只保留 3 个：
+//      LEDs[0] = R17   原 LED2
+//      LEDs[1] = P16   原 LED3
+//      LEDs[2] = U21   原 LED4
+//  空闲可用（原 LED5~7，未使用）：T21 / R19 / P19
+IO_LOC  "LEDs[0]"  R17;
+IO_LOC  "LEDs[1]"  P16;
+IO_LOC  "LEDs[2]"  U21;
+IO_PORT "LEDs[0]"  IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "LEDs[1]"  IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_PORT "LEDs[2]"  IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+// ============================================================
+//  ★ 原来这里的 BTN / BTN2 / BTN3 三个测试按键脚已【全部让位给钢琴键盘】
+// ============================================================
+//  2026/10/13 起：
+//      AA20（原 BTN）  -> KBD[3]（白键 4 = F4）
+//      Y21 （原 BTN2 / ADC bus0）-> KBD[7]（白键 8 = C5）
+//      Y22 （原 BTN3 / ADC bus1）-> KBD[6]（白键 7 = B4）
+//  所以本文件里不再有 BTN* 这几个端口的约束，详见下面键盘段。
+// ============================================================
+
+// ============================================================
+//  ★★ 钢琴键盘：8 个白键 + 2 个八度切换键（共 10 个按键）★★
+// ============================================================
+//  ★ 极性：所有按键都是【按下 = 高电平】，不用管正负极。
+//    空闲时脚上是低电平，所以 PULL_MODE=DOWN（没接时读 0，不会误触发）。
+//
+//  ★ 按键 -> 端口 -> 球号 对照（这就是"检测接口代号"）
+//    ★★ 顺序已按用户指定的排针顺序调整（白键 1 在最左 = C4）★★
+//    ┌──────────┬──────────────┬───────┬──────────────┐
+//    │ 按键     │ 端口         │ 球号  │ 按下时发的音  │
+//    ├──────────┼──────────────┼───────┼──────────────┤
+//    │ 白键 1   │ KBD[0]       │ AB20  │ C4  (MIDI 60) │
+//    │ 白键 2   │ KBD[1]       │ AA19  │ D4  (62)      │
+//    │ 白键 3   │ KBD[2]       │ AA21  │ E4  (64)      │
+//    │ 白键 4   │ KBD[3]       │ AA20  │ F4  (65)      │
+//    │ 白键 5   │ KBD[4]       │ AB22  │ G4  (67)      │
+//    │ 白键 6   │ KBD[5]       │ AB21  │ A4  (69)      │
+//    │ 白键 7   │ KBD[6]       │ Y22   │ B4  (71)      │
+//    │ 白键 8   │ KBD[7]       │ Y21   │ C5  (72)      │
+//    │ 八度 +   │ KBD_UP       │ P19   │ 整体 +12 半音 │
+//    │ 八度 -   │ KBD_DN       │ R19   │ 整体 -12 半音 │
+//    └──────────┴──────────────┴───────┴──────────────┘
+//
+//  ★ 从左到右接线时，音高就是 C D E F G A B C（低音在左）。
+//  ★ 八度键放在 PMOD0 排针的 P19 / R19 上（旁边就有 3V3 / GND，接线方便）。
+//  ★ I2C（ADS1115）用 PMOD0 的 T18 / R18 —— 和八度键同一个排针，
+//    三个模块的电源可以从同一组 3V3/GND 引脚取，接线集中。
+//  ★ 原来占 AA20 的 BTN 已让位给 KBD[3]。
+//
+//  ⚠️ 如果你的按键接到别的排针，把球号换成实际接的即可，
+//     端口名不用动 —— KBD[0..7] / KBD_UP / KBD_DN 就是检测接口代号。
+//
+//  ⚠️ 白键不是半音阶！C→D 差 2 个半音、E→F 只差 1 个，
+//     半音偏移表在 src/keyboard_in.v 的 white_semi() 里。
+//  ⚠️ top.v 里 KBD_REVERSE 必须是 1'b1，否则左右会反过来（高音跑到左边）。
+// ============================================================
+IO_LOC  "KBD[0]"  AB20;   // 白键 1 = C4 (60)
+IO_PORT "KBD[0]"  IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_LOC  "KBD[1]"  AA19;   // 白键 2 = D4 (62)
+IO_PORT "KBD[1]"  IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_LOC  "KBD[2]"  AA21;   // 白键 3 = E4 (64)
+IO_PORT "KBD[2]"  IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_LOC  "KBD[3]"  AA20;   // 白键 4 = F4 (65)   ★ 原 BTN 的位置
+IO_PORT "KBD[3]"  IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_LOC  "KBD[4]"  AB22;   // 白键 5 = G4 (67)
+IO_PORT "KBD[4]"  IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_LOC  "KBD[5]"  AB21;   // 白键 6 = A4 (69)
+IO_PORT "KBD[5]"  IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_LOC  "KBD[6]"  Y22;    // 白键 7 = B4 (71)
+IO_PORT "KBD[6]"  IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_LOC  "KBD[7]"  Y21;    // 白键 8 = C5 (72)   ★ 原 ADC bus0 / 旧 BTN2
+IO_PORT "KBD[7]"  IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_LOC  "KBD_UP"  P19;    // 升八度（+12 半音）★ PMOD0 排针，旁边有 3V3/GND
+IO_PORT "KBD_UP"  IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_LOC  "KBD_DN"  R19;    // 降八度（-12 半音）★ PMOD0 排针，旁边有 3V3/GND
+IO_PORT "KBD_DN"  IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+
+// ---------- 板载音频输出（I2S -> 立体声 DAC -> NS4263 功放） ----------
+IO_LOC  "HP_BCK"  Y17;
+IO_PORT "HP_BCK"  IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+IO_LOC  "HP_WS"   AB17;
+IO_PORT "HP_WS"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+IO_LOC  "HP_DIN"  AA16;
+IO_PORT "HP_DIN"  IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+IO_LOC  "PA_EN"   AB16;
+IO_PORT "PA_EN"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+// 注意：PA_EN 低有效（原理图：PA_EN=0 -> 功放开），代码里已恒定拉低
+
+// ---------- 用户按键 KEY0：运行时切换波形（音色）----------
+// 引脚/电平沿用 Sipeed 原始约束：AB13，BANK9（1.5V），低有效，内部上拉
+IO_LOC  "KEY0"  AB13;
+IO_PORT "KEY0"  IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+
+// ============================================================
+//  RGB LCD（40pin FPC 座 J5）—— 球号来自逐根核对原理图
+// ============================================================
+//  【本段的球号是怎么来的】
+//    不是照抄 Sipeed 相机例程的 tang_mega_60K_pins.cst！那份里写的是
+//        HSPI_HTCLK=J20 / HSPI_HTREQ=J21 / HSPI_HTRDY=L19 / HSPI_HTVLD=G18
+//    名字看着像，但**和本板 LCD 用的不是同一条线**：
+//        J20/J21/G18 在本板分别是 HRCLK / HRACK / HRVLD（相机接口）
+//    本板 LCD 真正用的是：
+//        面板 DCLK  = HTACK = L19   （不是 J20）
+//        面板 HSYNC = HTREQ = N20   （不是 J21）
+//        面板 VSYNC = HTVLD = L15   （不是 G18）
+//
+//  ★ 这是"背光亮但全黑"的两个根因之一：接错控制脚，面板一个时钟都收不到。
+//    （另一个根因是 CH569 抢总线，见文件末尾的说明。）
+//
+//  ★ 颜色是 RGB666（18 位）：
+//    面板是 TTL-24bit，但板上每通道只接出高 6 位，
+//    每通道最低 2 位（R1 R0 / G1 G0 / B1 B0）在板上直接接地。
+//    ⚠️ 曾经误判"R5 接在只能做输入的 L19 上、驱动不了" ——
+//       实际上 R5 接的是 HTRDY = J22（普通 IO），L19 是 DCLK。
+// ============================================================
+IO_LOC  "LCD_CLK"    L19;   // 面板脚 30 DCLK  <- 板上 HTACK
+IO_PORT "LCD_CLK"    IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+IO_LOC  "LCD_HSYNC"  N20;   // 面板脚 32 HSYNC <- 板上 HTREQ
+IO_PORT "LCD_HSYNC"  IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+IO_LOC  "LCD_VSYNC"  L15;   // 面板脚 33 VSYNC <- 板上 HTVLD
+IO_PORT "LCD_VSYNC"  IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+IO_LOC  "LCD_DEN"    L14;   // 面板脚 34 DEN   <- 板上 HD2（★ DEN 走数据线！）
+IO_PORT "LCD_DEN"    IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+// ---------- 红色 R[5:0] = 面板 R7..R2 ----------
+IO_LOC  "LCD_R[5]"   K21;   // 面板 R7 (MSB) <- HD4
+IO_PORT "LCD_R[5]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_R[4]"   K22;   // 面板 R6       <- HD3
+IO_PORT "LCD_R[4]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_R[3]"   J22;   // 面板 R5       <- HTRDY
+IO_PORT "LCD_R[3]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_R[2]"   H22;   // 面板 R4       <- HD1
+IO_PORT "LCD_R[2]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_R[1]"   G17;   // 面板 R3       <- HD0
+IO_PORT "LCD_R[1]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_R[0]"   G18;   // 面板 R2 (LSB) <- HRVLD
+IO_PORT "LCD_R[0]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+// ---------- 绿色 G[5:0] = 面板 G7..G2 ----------
+IO_LOC  "LCD_G[5]"   L18;   // 面板 G7 (MSB) <- HD10
+IO_PORT "LCD_G[5]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_G[4]"   N22;   // 面板 G6       <- HD9
+IO_PORT "LCD_G[4]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_G[3]"   M22;   // 面板 G5       <- HD8
+IO_PORT "LCD_G[3]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_G[2]"   M21;   // 面板 G4       <- HD7
+IO_PORT "LCD_G[2]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_G[1]"   L21;   // 面板 G3       <- HD6
+IO_PORT "LCD_G[1]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_G[0]"   K18;   // 面板 G2 (LSB) <- HD5
+IO_PORT "LCD_G[0]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+// ---------- 蓝色 B[5:0] = 面板 B7..B2 ----------
+IO_LOC  "LCD_B[5]"   M20;   // 面板 B7 (MSB) <- HCTS
+IO_PORT "LCD_B[5]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_B[4]"   L16;   // 面板 B6       <- HD15
+IO_PORT "LCD_B[4]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_B[3]"   K16;   // 面板 B5       <- HD14
+IO_PORT "LCD_B[3]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_B[2]"   N18;   // 面板 B4       <- HD13
+IO_PORT "LCD_B[2]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_B[1]"   N19;   // 面板 B3       <- HD12
+IO_PORT "LCD_B[1]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "LCD_B[0]"   M18;   // 面板 B2 (LSB) <- HD11
+IO_PORT "LCD_B[0]"   IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+// ---------- 背光使能 ----------
+//  面板 1/2 脚 LED_K/LED_A；板上经 LP3320 升压，高有效。
+//  ⚠️ 实测：板上 R47(20.5K) 把 LP3320 的 EN 上拉到 +3.3V，
+//     只要板子一上电背光就是亮的，和 FPGA 跑没跑、屏有没有收到信号无关。
+//     所以"背光亮"完全不能说明任何问题 —— 判断 FPGA 有没有在跑要看 LED。
+IO_LOC  "LCD_BL"     P20;
+IO_PORT "LCD_BL"     IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+// ============================================================
+//  ★★ 显示不出来的第二个根因：CH569 在抢同一组总线 ★★
+// ============================================================
+//  面板的【每一根】信号线都同时挂在板上的 CH569W（U12）上：
+//      DCLK = HTACK = CH569 的 PA10      HSYNC = HTREQ = PA9
+//      VSYNC= HTVLD = PA21               DEN   = HD2   = PA22
+//      18 根颜色线 = CH569 的 PB0~PB15
+//
+//  CH569 一上电就去驱动这些脚，和 FPGA 对打 —— 最要命的是 DCLK 线被两个
+//  输出源同时驱动，面板拿到的是一个被搅烂的时钟，于是什么都不显示、只剩背光。
+//
+//  ★ 永久解决办法：板上有 3pin 跳线 J17，它跨在 CH569 的电源使能上：
+//        J17-1 = +3V3   J17-2 = CH569_EN   J17-3 = GND
+//    不插（默认）：CH569_EN 被 R36 拉到 GND -> Q9 导通 -> CH569 供电 -> 抢总线
+//    短接 1-2 脚：CH569_EN = +3V3 -> Q9 关断 -> CH569 断电 -> 总线让给 LCD
+//
+//  代价：CH569 的 USB3 功能同时没了（本来就是"LCD / CH569 二选一"）。
+//  实测：按住板上 CH569 电源键 SW6 时屏立刻出图，松开又黑 —— 这就是实锤。
+// ============================================================
+// ============================================================
+//  ★ I2C 总线：两颗 ADS1115（8 路压力传感器力度感应）
+// ============================================================
+//  接线：
+//      ADS1115 #1  VDD=3.3V GND=GND SDA/SCL 并联  ADDR=GND -> 地址 0x48
+//      ADS1115 #2  VDD=3.3V GND=GND SDA/SCL 并联  ADDR=VCC -> 地址 0x49
+//      AIN0~AIN3 各接一个压力传感器转换模块的 AO 输出（0~3.3V）
+//
+//  ★ 上拉电阻：整条 I2C 总线【只需一组】4.7kΩ 上拉到 3.3V。
+//    如果两个模块都自带上拉，要拆掉其中一组（并联后阻值太小会灌大电流）。
+//
+//  ★ 引脚选择：T18 / R18（PMOD0 排针）
+//    和八度键（P19 / R19）在同一个排针上，旁边就有 3V3 / GND，
+//    ADS1115 的电源可以从同一组引脚就近取，接线最短。
+//    ⚠️ 如果这两个脚不方便接线，换成任意空闲脚即可（端口名不用动）。
+//  ★ 开漏 + 内部弱上拉（PULL_MODE=UP）只是兜底，实际必须外接 4.7kΩ。
+IO_LOC  "ADS_SDA"  R18;   // ★ 实际接线：模块 SDA 接在 R18
+IO_PORT "ADS_SDA"  IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+
+IO_LOC  "ADS_SCL"  T18;   // ★ 实际接线：模块 SCL 接在 T18
+IO_PORT "ADS_SCL"  IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+// ============================================================
+//  ★ HDMI 输出（TMDS 差分）—— 官方 DVI_TX IP（TLVDS）
+// ============================================================
+//  写法完全照 Sipeed cam2dvi 例程（它用的就是同一个 DVI_TX IP）：
+//
+//      IO_LOC  "tmds_d_p_0[0]" J14,H14;
+//      IO_PORT "tmds_d_p_0[0]" PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+//
+//  ★ 三个要点：
+//     1) 不写 IO_TYPE —— 差分配置由 IP 内部的 TLVDS_OBUF 原语决定，
+//        显式写 LVCMOS33D 会覆盖它（之前就栽在这里）。
+//     2) DRIVE=3.5。
+//     3) 只约束 P 端；N 端不约束（官方例程同样不约束）。
+// ============================================================
+IO_LOC  "TMDS_D_P[0]" J14,H14;
+IO_PORT "TMDS_D_P[0]" PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+
+IO_LOC  "TMDS_D_P[1]" J15,H15;
+IO_PORT "TMDS_D_P[1]" PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+
+IO_LOC  "TMDS_D_P[2]" K17,J17;
+IO_PORT "TMDS_D_P[2]" PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
+
+IO_LOC  "TMDS_CLK_P" G15,G16;
+IO_PORT "TMDS_CLK_P" PULL_MODE=NONE DRIVE=3.5 BANK_VCCIO=3.3;
